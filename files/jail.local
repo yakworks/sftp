@@ -1,0 +1,12 @@
+[DEFAULT]
+# fail2ban bantime is the total number of seconds that a host is banned
+bantime = 3600
+
+[sshd]
+enabled = true
+mode = normal
+logpath = /var/log/ssh.log
+
+[sshd-ddos]
+enabled = false
+logpath = /var/log
