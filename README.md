@@ -20,7 +20,7 @@ merges in a number of PRs to fix a number of issues
 - [Quickstart Example](#quickstart-example)
 - [Summary](#summary)
     - [Simplest docker run example](#simplest-docker-run-example)
-- [Volume `data` mount](#volume-data-mount)
+- [Volume DATAMOUNT env](#volume-datamount-env)
     - [Data Volume Examples](#data-volume-examples)
 - [User Credentials](#user-credentials)
     - [users.conf](#usersconf)
@@ -86,40 +86,48 @@ User "foo" with password "pass" can login with sftp and upload files to the defa
 
 NOTE: in this example Fail2Ban will probably fail as it needs the NET_ADMIN capability
 
-## Volume `data` mount
+## Volume DATA_MOUNT env
 
-Opinionated permission defaults. This sets users and groups in a number of ways that attempt to make sharing files
+Opinionated defaults. This sets users and groups in a number of ways that attempt to make sharing files
 cleaner across multiple users
 
-- if the data volume is mounted then it will create `/data/users/:user` for each user under it
-- **staff/owner group**: a `staff` or `50` group is considered an owner, ex:`foo:pass::staff`.
-  - staff will have `/data` link mounted to their `/home/:user/data` and will have full rw access to the whole dir.
-  - staff will have primary group of `users` and will also have staff group as secondary
+set the `DATA_MOUNT` environment var to the dir that was mounted in volumes.
+
+- if the data volume is mounted then it will create a "home" `/data/users/:user` for each user
 - **users group**: a `users` or `100` group is considered limited in visibility, ex:`foo:pass::user`
-  - `users` will have the `/data/users/:user` link mounted to `/home/:user/data` and will be limitd to that dir
+  - `users` will have the home `/data/users/:user` bind mounted to their chroot `/home/:user/home` and read/write be limited to that dir
+- **staff/owner group**: a `staff` or `50` group is considered an owner, ex:`foo:pass::staff`.
+  - `staff` will also have the home `/data/users/:user` bind mounted to their chroot `/home/:user/home`
+  - staff will also have the `/$DATA_MOUNT` bind mounted in their chroot `/home/:user/data` and will have full rw access to the whole dir.
+  - staff will have primary group of `users` and will also have staff group as secondary
+- any directories in the user definition are additional bind mounts in users base dir in addition to `home` and `data`. This can be used to give user access to dirs in `/data`
 - `--cap-add=SYS_ADMIN` is needed for the mounting. see kubernetes example for adding securityContext.capabilities
-- set the `DATA_MOUNT_NAME` env can be set to change the name from `data`.  
 
 ### Data Volume Examples
 
 Let's mount a directory and make a user and staf owner with UIDs as well. 
 
 ```
-mkdir -p target/yakbox-sftp
+mkdir -p target/sftp-vol/private
+mkdir -p target/sftp-vol/public
 
 docker run --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
-  -e DATA_MOUNT_NAME=yakbox \
-  -v $(pwd)/target/yakbox-sftp:/data \
+  -e DATA_MOUNT=/sftp-data \
+  -v $(pwd)/target/sftp-vol:/sftp-data \
   -p 2222:22 -d yakworks/sftp \
-  owner1:pass::staff user1:pass::users
+  owner1:pass::staff user1:pass::users:/sftp-data/public
 ```
 
-In this example when they owner1 user sftp's in they will have a `yakbox` dir that is essentially mapped to the 
-`target/yakbox-sftp` dir via the `data` share. 
-The user1 will end up having a `target/yakbox-sftp/users/user1` dir created for them and they will also see a
-`yakbox` dir when stping that is mapped and restricted to that dir. 
+this will create a 
+Both users will have a `home` dir in their root dir when they login. This will point to the 
+`target/yakbox-sftp/home/:user` that was created for them.
+In this example when they owner1 user sftp's in they will have a `sftp-data` dir that is 
+essentially mapped to the `target/sftp-vol` dir via the `DATA_MOUNT` share and can see every thing. 
 
-Go ahead and try out fail2ban. enter 5 bad logins and see what happens. 
+The user1 will end up having a `home` dir and because of the user config will also be able to 
+see `sftp-data/public` that is mapped to `target/sftp-vol/public`
+
+Also, go ahead and try out fail2ban. enter 5 bad logins and see what happens. 
 
 ## User Credentials
 
@@ -188,18 +196,10 @@ The `examples/docker` shows this in action
 
 ## Providing server SSH host keys (recommended)
 
-For consistent server fingerprint, mount your own host keys (i.e. `/etc/ssh/ssh_host_*`)
+For consistent server fingerprint, mount `/etc/sftp/host_keys.d` with your 
+ssh_host_ed25519_key and ssh_host_rsa_key host keys. OpenSSH seems to requires limited file permissions on these as well so in init it will copy the files from host_keys.d to etc/ssh.
 
-This container will generate new SSH host keys at first run. To avoid that your users get a MITM warning when you recreate your container (and the host keys changes), you can mount your own host keys.
-
-```
-docker run \
-    -v /host/ssh_host_ed25519_key:/etc/ssh/ssh_host_ed25519_key \
-    -v /host/ssh_host_rsa_key:/etc/ssh/ssh_host_rsa_key \
-    -v /host/share:/home/foo/share \
-    -p 2222:22 -d atmoz/sftp \
-    foo::1001
-```
+If not then this container will generate new SSH host keys at first run. To avoid that your users get a MITM warning when you recreate your container (and the host keys changes), you can mount your own host keys.
 
 Tip: you can generate your keys with these commands:
 
@@ -212,6 +212,7 @@ or using this docker image itself
 
 ```
 mkdir keys
+
 # runs the image and copies the keys out to use then exits
 docker run -it --rm -v $(pwd):/workdir yakworks/sftp \
 cp /etc/ssh/ssh_host_ed25519_key* /etc/ssh/ssh_host_rsa_key* /workdir/keys
