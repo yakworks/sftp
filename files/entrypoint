@@ -100,8 +100,13 @@ if [ -d /etc/sftp.d ]; then
 fi
 
 # Fail2ban
-touch /var/log/auth.log
-service fail2ban start
+if [ "$FAIL2BAN" ] && [ "$FAIL2BAN" = false ]; then
+    log "FAIL2BAN is has been set to disabled"
+else
+    touch /var/log/auth.log
+    service fail2ban start
+fi
+
 
 if $startSshd; then
     #log "Executing sshd"

@@ -64,14 +64,27 @@ See README there for more info
 
 - **Fail2Ban** is configured with intelligent defaults and the logs for both var/log/auth.log 
   and /var/log/  fail2ban.conf is tailed to the output for docker and kubernetes
-  - for fail2ban to work it needs the `--cap-add=NET_ADMIN` permissions added to docker. if your running into 
-    issues then, while not recomended, you can brute force it with `--privileged`
-  - in kubernetes the container should have 
-    ```
-    securityContext:
-      privileged: true # only need
-      capabilities:
-        add: ["SYS_ADMIN", "NET_ADMIN"]
+  
+  - to disable it set env var `-e FAIL2BAN=false`
+  - for fail2ban to work it needs the `--cap-add=NET_ADMIN` permissions added to Docker. 
+    if your running into issues then, while not recomended, you can brute force it with `--privileged`
+  - in kubernetes the container should use `hostPort` to bypass the kub-proxy, otherwise it doesn't see
+    the originating ip adress and will ban the internal one. Using a loadbalancer not tested and will require some special configuration to pass through originating ip. Test and keep an eye on logs
+    ``
+    # generally will be used to force it to run on a specific node when using hostPort
+    nodeName: kub-node-1
+    containers:
+    - name: sftp
+      image: yakworks/sftp:latest
+      ports:
+        - name: ssh
+          containerPort: 22
+          # map to the node host's port to skip kub-proxy so fail2ban can see ip
+          hostPort: 9922
+      securityContext:
+        privileged: true # nuclear option if mount is not working with capabilities below
+        capabilities:
+          add: ["SYS_ADMIN", "NET_ADMIN", "NET_BIND_SERVICE"]
     ```
 
 ### Simplest docker run example

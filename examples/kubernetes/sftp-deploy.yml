@@ -48,12 +48,15 @@ spec:
           - name: DATA_MOUNT
             value: /sftp-data
         ports:
-          - containerPort: 22
+          - name: ssh
+            containerPort: 22
+            # map to hostPost to skip kub-proxy so fail2ban can see ip
+            hostPort: 9922
         securityContext:
           # privileged=true is nuclear approach if capabilities is not working
           # privileged: true
           capabilities:
-            add: ["SYS_ADMIN", "NET_ADMIN"]
+            add: ["SYS_ADMIN", "NET_ADMIN", "NET_BIND_SERVICE"]
         volumeMounts:
         - mountPath: /etc/ssh/ssh_host_ed25519_key
           name: sftp-host-keys

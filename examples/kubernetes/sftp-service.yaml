@@ -1,3 +1,4 @@
+#if not using fail2ban then can use a nodeport saervice
 kind: Service
 apiVersion: v1
 metadata:
