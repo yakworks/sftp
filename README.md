@@ -70,8 +70,9 @@ See README there for more info
     if your running into issues then, while not recomended, you can brute force it with `--privileged`
   - in kubernetes the container should use `hostPort` to bypass the kub-proxy, otherwise it doesn't see
     the originating ip adress and will ban the internal one. Using a loadbalancer not tested and will require some special configuration to pass through originating ip. Test and keep an eye on logs
-    ``
-    # generally will be used to force it to run on a specific node when using hostPort
+    
+    ```
+    # generally will want to force pod to run on a specific node when using hostPort
     nodeName: kub-node-1
     containers:
     - name: sftp
